@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from seaborn import pairplot
 
-train_data = pd.read_csv('claims_train.csv')
+train_data = pd.read_csv('../claims_train.csv')
 
 # pairplot(train_data[
 #     ['Area', 'VehPower', 'VehAge', 'DrivAge', 'BonusMalus', 

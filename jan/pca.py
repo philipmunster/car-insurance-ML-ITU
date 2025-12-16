@@ -9,8 +9,18 @@ from sklearn.decomposition import PCA
 
 df = pd.read_csv('claims_train.csv')
 
+# Removing wrong entries with Exposure > 1
+df = df[df['Exposure'] <= 1]
+
+# Creating target variable 'CPY' (Claims per Year)
+df['CPY'] = df['ClaimNb'] / df['Exposure']
+
+# Remove ID, ClaimNb and Exposure columns
+df = df.drop(columns=['IDpol', 'ClaimNb', 'Exposure'])
+
+
 # Select numeric column for PCA
-numeric_cols = df.select_dtypes(include=['number']).columns
+numeric_cols = ['VehAge', 'DrivAge', 'BonusMalus', 'Density', 'VehPower']
 
 # Scale the numeric columns because PCA is affected by the scale of the data
 scaler = StandardScaler()

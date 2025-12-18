@@ -6,37 +6,141 @@ from seaborn import pairplot
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
+df = pd.read_csv('../claims_train.csv')
 
-df = pd.read_csv('claims_train.csv')
-
-# Removing wrong entries with Exposure > 1
+# Drop Exposure > 1, IDpol
 df = df[df['Exposure'] <= 1]
+df = df.drop(columns=['IDpol'])
 
-# Creating target variable 'CPY' (Claims per Year)
-df['CPY'] = df['ClaimNb'] / df['Exposure']
+# Drop the categorical variables
+df = df.drop(columns = ['VehBrand', 'Region'])
 
-# Remove ID, ClaimNb and Exposure columns
-df = df.drop(columns=['IDpol', 'ClaimNb', 'Exposure'])
+df = df.drop(columns=["Area", "VehGas"])
 
+# Log-Transforming Skewed Features
+df['log_Density'] = np.log1p(df['Density'])
+df['log_BonusMalus'] = np.log1p(df['BonusMalus'])
 
-# Select numeric column for PCA
-numeric_cols = ['VehAge', 'DrivAge', 'BonusMalus', 'Density', 'VehPower']
+# Implement Target Variable, drop ClaimNb, Exposure
+df['cpy'] = df['ClaimNb'] / df['Exposure']
+df = df.drop(columns=['ClaimNb'])
 
-# Scale the numeric columns because PCA is affected by the scale of the data
+# Standard Scaling Numerical Features (not the target variable cpy)
+pca_features = [
+    'Exposure',
+    'VehAge',
+    'DrivAge',
+    'VehPower',
+    'log_Density',
+    'log_BonusMalus',
+]
+
+X = df[pca_features]
+
 scaler = StandardScaler()
-df_scaled = scaler.fit_transform(df[numeric_cols])
-df_scaled = pd.DataFrame(df_scaled, columns=numeric_cols)
+X_scaled = scaler.fit_transform(X)
 
-# Apply PCA
+X_scaled = pd.DataFrame(
+    X_scaled,
+    columns=X.columns,
+    index=X.index
+)
+
+#################
+# PCA, scree Plot
+#################
+pca = PCA()
+pca.fit(X_scaled)
+
+explained_var = pca.explained_variance_ratio_
+cumulative_var = np.cumsum(explained_var)
+
+components = np.arange(1, len(explained_var) + 1)
+
+plt.figure(figsize=(8, 5))
+
+# Individual explained variance (bars)
+plt.bar(
+    components,
+    explained_var,
+    alpha=0.7,
+    label='Individual Explained Variance'
+)
+
+# Cumulative explained variance (line)
+plt.plot(
+    components,
+    cumulative_var,
+    marker='o',
+    linestyle='--',
+    label='Cumulative Explained Variance'
+)
+
+plt.xlabel('Principal Component')
+plt.ylabel('Explained Variance Ratio')
+plt.title('PCA Scree Plot')
+plt.xticks(components)
+plt.legend()
+plt.grid(True, alpha=0.3)
+
+plt.show()
+
+###########################
+# PCA two compontents plot
+###########################
+
 pca = PCA(n_components=2)
-pca_features = pca.fit_transform(df_scaled)
+X_pca = pca.fit_transform(X_scaled)
 
-# PCA Plot
-pca_df = pd.DataFrame(data=pca_features, columns=['PC1', 'PC2'])
-plt.figure(figsize=(8,6))
-plt.scatter(pca_df['PC1'], pca_df['PC2'], alpha=0.6, s=10, color='steelblue')
+# Create DataFrame with PC scores
+pca_df = pd.DataFrame(
+    X_pca,
+    columns=['PC1', 'PC2'],
+    index=X_scaled.index
+)
+
+# Scatter plot
+plt.figure(figsize=(8, 6))
+plt.scatter(
+    pca_df['PC1'],
+    pca_df['PC2'],
+    alpha=0.6,
+    s=10
+)
 plt.xlabel('Principal Component 1')
 plt.ylabel('Principal Component 2')
-plt.title('PCA Projection')
-plt.grid(True)
+plt.title('PCA Projection (PC1 vs PC2)')
+plt.grid(True, alpha=0.3)
 plt.show()
+
+
+#############################################
+# PCA two compontents + target variable plot
+#############################################
+
+pca_df['cpy_bin'] = pd.cut(
+    df['cpy'],
+    bins=[-0.01, 0, 1, 2, np.inf],
+    labels=['0', '(0, 1]', '(1, 2]', '>2']
+)
+
+
+plt.figure(figsize=(8, 6))
+for label in pca_df['cpy_bin'].cat.categories:
+    mask = pca_df['cpy_bin'] == label
+    plt.scatter(
+        pca_df.loc[mask, 'PC1'],
+        pca_df.loc[mask, 'PC2'],
+        label=f'cpy {label}',
+        alpha=0.5,
+        s=10
+    )
+
+plt.xlabel('Principal Component 1')
+plt.ylabel('Principal Component 2')
+plt.title('PCA Projection by Claim Frequency Bins')
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.show()
+
+

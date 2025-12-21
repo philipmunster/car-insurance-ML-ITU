@@ -155,41 +155,38 @@ def create_full_pipeline(use_target_encoding=False, alpha=10):
     # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
     # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
-    data = pd.read_csv('data/claims_train.csv')
+data = pd.read_csv('data/claims_train.csv')
 
-    pipeline_target = create_full_pipeline(use_target_encoding=True, alpha=10)
+# Step 1: Split FIRST (keep all columns initially)
+train_data, test_data = train_test_split(
+    data, test_size=0.4, random_state=42
+)
 
-    feat_engineer = FeatureEngineeringPipeline()
-    X_engineered = feat_engineer.fit_transform(data)
+# Step 2: Feature engineering on split data
+feat_engineer = FeatureEngineeringPipeline()
+X_train_eng = feat_engineer.fit_transform(train_data)  # Fit on train only
+X_test_eng = feat_engineer.transform(test_data)
 
-    # Split
-    X = X_engineered.drop(['ClaimNb', 'Exposure', 'cpy'], axis=1, errors='ignore')
-    y = X_engineered['cpy']
+# Step 3: Separate features and target AFTER feature engineering
+X_train = X_train_eng.drop(['ClaimNb', 'Exposure', 'cpy'], axis=1, errors='ignore')
+X_test = X_test_eng.drop(['ClaimNb', 'Exposure', 'cpy'], axis=1, errors='ignore')
+y_train = X_train_eng['ClaimNb']
+y_test = X_test_eng['ClaimNb']
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4, random_state=42)
+# Step 4: Target encoding - fit on train only
+target_encoder = SmoothedTargetEncoder(column='Region', alpha=10)
+X_train_target_enc = target_encoder.fit_transform(X_train, y_train)  # Fit on train
+X_test_target_enc = target_encoder.transform(X_test)  # Transform only
 
-    # Apply target encoding
-    target_encoder = SmoothedTargetEncoder(column='Region', alpha=10)
-    X_train_encoded = target_encoder.fit_transform(X_train, y_train)
-    X_val_encoded = target_encoder.transform(X_test)
+# Step 5: One-hot encoding with proper names
+X_train, X_test, onehot_encoder = apply_onehot_with_names(
+    X_train_target_enc,
+    X_test_target_enc,
+    ['VehBrand', 'VehGas']
+)
 
-    # Then one-hot encode remaining
-    onehot = ColumnTransformer([
-        ('onehot_encoder', OneHotEncoder(sparse_output=False, drop='first'),
-         ['VehBrand', 'VehGas'])
-    ], remainder='passthrough')
-
-    X_train = onehot.fit_transform(X_train_encoded)
-    X_test = onehot.transform(X_val_encoded)
-
-    X_train, X_test, onehot_encoder = apply_onehot_with_names(
-        X_train_encoded,
-        X_val_encoded,
-        ['VehBrand', 'VehGas']
-    )
-
-    # Fix column names (one-hot encoder adds prefixes)
-    X_train.columns = X_train.columns.str.replace('onehot__', '')
-    X_test.columns = X_test.columns.str.replace('onehot__', '')
-    X_train.columns = X_train.columns.str.replace('remainder__', '')
-    X_test.columns = X_test.columns.str.replace('remainder__', '')
+# Fix column names
+X_train.columns = X_train.columns.str.replace('onehot__', '')
+X_test.columns = X_test.columns.str.replace('onehot__', '')
+X_train.columns = X_train.columns.str.replace('remainder__', '')
+X_test.columns = X_test.columns.str.replace('remainder__', '')

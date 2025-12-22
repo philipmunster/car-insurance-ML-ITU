@@ -3,8 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-df = pd.read_csv('../claims_train.csv')
-df_test = pd.read_csv('../claims_test.csv')
+df = pd.read_csv('claims_train.csv')
+df_test = pd.read_csv('claims_test.csv')
 
 # Check for missing values
 df.isnull().any(axis=1).sum()
